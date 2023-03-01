@@ -7,9 +7,9 @@ import (
 	"net/http"
 )
 
-type Symb struct {
-	Symbol struct {
-	} `json:"symbols"`
+type ExchangeRates struct {
+	Success bool              `json:"success"`
+	Rates   map[string]string `json:"symbols"`
 }
 type Conv struct {
 	Result float64 `json:"result"`
@@ -50,8 +50,13 @@ func Sym() {
 	}
 	Err(err)
 	body, _ := ioutil.ReadAll(res.Body)
-
-	fmt.Println(string(body))
+	var s ExchangeRates
+	err = json.Unmarshal(body, &s)
+	Err(err)
+	fmt.Println("Список доступных валют:")
+	for i, k := range s.Rates {
+		fmt.Println(i, k)
+	}
 }
 
 func Convert(from, to, amount string) {
