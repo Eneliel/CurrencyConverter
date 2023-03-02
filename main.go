@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
+	"log"
 	"net/http"
 )
 
@@ -16,30 +18,17 @@ type Conv struct {
 }
 
 func main() {
-
-	var in string
-	for {
-		fmt.Println("Print any command:\n'Sym', 'Convert','Exit'")
-		fmt.Scan(&in)
-		if in == "Sym" {
-			Sym()
-		} else if in == "Convert" {
-			var to, from, amount string
-			fmt.Println("Convert to >")
-			fmt.Scan(&to)
-			fmt.Println("Convert from >")
-			fmt.Scan(&from)
-			fmt.Println("Convert amount >")
-			fmt.Scan(&amount)
-			Convert(to, from, amount)
-		} else if in == "Exit" || in == "exit" {
-			break
-		}
-	}
+	http.HandleFunc("/Sym", HandlerSym)
+	http.HandleFunc("/", HandlerConv)
+	http.HandleFunc("/calc", HandlerCalc)
+	err := http.ListenAndServe(":8000", nil)
+	log.Fatal(err)
 }
-func Sym() {
-	url := "https://api.apilayer.com/exchangerates_data/symbols"
 
+func HandlerSym(w http.ResponseWriter, r *http.Request) {
+	html, err := template.ParseFiles("Sym.html")
+	Err(err)
+	url := "https://api.apilayer.com/exchangerates_data/symbols"
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Set("apikey", "S5zUr9PkYd4GbHaoQwGh5xtbf70YTMGB")
@@ -53,15 +42,30 @@ func Sym() {
 	var s ExchangeRates
 	err = json.Unmarshal(body, &s)
 	Err(err)
-	fmt.Println("Список доступных валют:")
-	for i, k := range s.Rates {
-		fmt.Println(i, k)
-	}
+	err = html.Execute(w, s)
+	Err(err)
 }
 
-func Convert(from, to, amount string) {
-	url := "https://api.apilayer.com/exchangerates_data/convert?to=" + to + "&from=" + from + "&amount=" + amount
+func HandlerConv(w http.ResponseWriter, r *http.Request) {
+	html, err := template.ParseFiles("Conv.html")
+	Err(err)
+	err = html.Execute(w, nil)
+	Err(err)
+}
 
+func HandlerCalc(w http.ResponseWriter, r *http.Request) {
+	to := r.FormValue("to")
+	from := r.FormValue("from")
+	amount := r.FormValue("amount")
+	Result := Convert(from, to, amount)
+	hmtl, err := template.ParseFiles("Calc.html")
+	Err(err)
+	err = hmtl.Execute(w, Result)
+	Err(err)
+}
+
+func Convert(from, to, amount string) float64 {
+	url := "https://api.apilayer.com/exchangerates_data/convert?to=" + to + "&from=" + from + "&amount=" + amount
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Set("apikey", "S5zUr9PkYd4GbHaoQwGh5xtbf70YTMGB")
@@ -78,7 +82,7 @@ func Convert(from, to, amount string) {
 	Err(err)
 	var s Conv
 	json.Unmarshal(body, &s)
-	fmt.Println(s.Result)
+	return s.Result
 }
 
 func Err(err error) {
