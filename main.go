@@ -1,92 +1,49 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"html/template"
-	"io/ioutil"
+	cur_conv "bot_mod/CC"
 	"log"
-	"net/http"
+	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-type ExchangeRates struct {
-	Success bool              `json:"success"`
-	Rates   map[string]string `json:"symbols"`
-}
-type Conv struct {
-	Result float64 `json:"result"`
-}
-
 func main() {
-	http.HandleFunc("/Sym", HandlerSym)
-	http.HandleFunc("/", HandlerConv)
-	http.HandleFunc("/calc", HandlerCalc)
-	err := http.ListenAndServe(":8000", nil)
-	log.Fatal(err)
-}
-
-func HandlerSym(w http.ResponseWriter, r *http.Request) {
-	html, err := template.ParseFiles("Sym.html")
-	Err(err)
-	url := "https://api.apilayer.com/exchangerates_data/symbols"
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("apikey", "S5zUr9PkYd4GbHaoQwGh5xtbf70YTMGB")
-	Err(err)
-	res, err := client.Do(req)
-	if res.Body != nil {
-		defer res.Body.Close()
-	}
-	Err(err)
-	body, _ := ioutil.ReadAll(res.Body)
-	var s ExchangeRates
-	err = json.Unmarshal(body, &s)
-	Err(err)
-	err = html.Execute(w, s)
-	Err(err)
-}
-
-func HandlerConv(w http.ResponseWriter, r *http.Request) {
-	html, err := template.ParseFiles("Conv.html")
-	Err(err)
-	err = html.Execute(w, nil)
-	Err(err)
-}
-
-func HandlerCalc(w http.ResponseWriter, r *http.Request) {
-	to := r.FormValue("to")
-	from := r.FormValue("from")
-	amount := r.FormValue("amount")
-	Result := Convert(from, to, amount)
-	hmtl, err := template.ParseFiles("Calc.html")
-	Err(err)
-	err = hmtl.Execute(w, Result)
-	Err(err)
-}
-
-func Convert(from, to, amount string) float64 {
-	url := "https://api.apilayer.com/exchangerates_data/convert?to=" + to + "&from=" + from + "&amount=" + amount
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("apikey", "S5zUr9PkYd4GbHaoQwGh5xtbf70YTMGB")
-
+	bot, err := tgbotapi.NewBotAPI("6288334300:AAEbaCuAKl1UdB2aJ3xN2snU4uw-JnjBG-o")
 	if err != nil {
-		fmt.Println(err)
+		log.Panic(err)
 	}
-	res, err := client.Do(req)
-	if res.Body != nil {
-		defer res.Body.Close()
-	}
-	Err(err)
-	body, err := ioutil.ReadAll(res.Body)
-	Err(err)
-	var s Conv
-	json.Unmarshal(body, &s)
-	return s.Result
-}
 
-func Err(err error) {
-	if err != nil {
-		fmt.Println(err)
+	bot.Debug = true
+
+	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+
+	updates := bot.GetUpdatesChan(u)
+
+	for update := range updates {
+		if update.Message != nil { // If we got a message
+			str := strings.Split(update.Message.Text, " ")
+			in_str := strings.ToLower(str[0])
+			switch in_str {
+			case "conv":
+				from := strings.ToUpper(str[1])
+				to := strings.ToUpper(str[2])
+				amount := str[3]
+				out := cur_conv.Conv(from, to, amount)
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, out))
+			case "symb":
+				m := cur_conv.Sym()
+				var out string
+				for k, v := range m {
+					out += k + " : " + v + "\n"
+				}
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, out))
+			default:
+			}
+
+		}
 	}
 }
