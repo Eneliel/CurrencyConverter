@@ -17,7 +17,7 @@ type Convert struct {
 	Result float64 `json:"result"`
 }
 
-func Sym() map[string]string {
+func Sym() string {
 	url := "https://api.apilayer.com/exchangerates_data/symbols"
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -32,7 +32,11 @@ func Sym() map[string]string {
 	var s ExchangeRates
 	err = json.Unmarshal(body, &s)
 	Err(err)
-	return s.Rates
+	var out string
+	for k, v := range s.Rates {
+		out += k + " : " + v + "\n"
+	}
+	return out
 }
 
 func Conv(from, to, amount string) string {
