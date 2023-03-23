@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	_ "github.com/go-sql-driver/mysql"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -20,7 +21,8 @@ func main() {
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
-	str := []string{"Converter", "Show all Cymbols"}
+	str := []string{"Converter", "Show all Cymbols", "Wallet"}
+	wallet_keyb := []string{"Добавить", "Убавить", "Назад"}
 	keyb := tgbotapi.InlineKeyboardMarkup{}
 	for _, i := range str {
 		var row []tgbotapi.InlineKeyboardButton
@@ -29,16 +31,18 @@ func main() {
 		keyb.InlineKeyboard = append(keyb.InlineKeyboard, row)
 	}
 
+	wal_keyb := tgbotapi.InlineKeyboardMarkup{}
+	for _, i := range wallet_keyb {
+		var row []tgbotapi.InlineKeyboardButton
+		btn := tgbotapi.NewInlineKeyboardButtonData(i, i)
+		row = append(row, btn)
+		wal_keyb.InlineKeyboard = append(wal_keyb.InlineKeyboard, row)
+	}
+	//&& update.CallbackQuery == nil
 	for update := range updates {
-		if update.Message != nil && update.CallbackQuery == nil {
+		if update.Message != nil && update.CallbackQuery == nil && !update.Message.IsCommand() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
-			switch update.Message.Text {
-			case "start":
-				msg.Text = "Выберите:"
-				msg.ReplyMarkup = keyb
-			default:
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Отправте 'start' чтобы начать!")
-			}
+			msg.Text = "Выберите в меню /start, чтобы начать"
 			if _, err := bot.Send(msg); err != nil {
 				panic(err)
 			}
@@ -86,7 +90,71 @@ func main() {
 				if _, err := bot.Send(msg); err != nil {
 					panic(err)
 				}
+			case "Wallet":
+				msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data)
+				id := update.CallbackQuery.Message.Chat.ID
+				msg.ReplyMarkup = wal_keyb
+				bot.Send(msg)
+				for update2 := range updates {
+					if update2.CallbackQuery != nil {
+						switch update2.CallbackData() {
+						case "Добавить":
+							msg.ReplyMarkup = nil
+							msg.Text = "В какой валюте хотите добавить и сколько\nВся валюта будет конвертированна в рубли"
+							bot.Send(msg)
+							for update3 := range updates {
+								if update3.Message != nil {
+									msg = tgbotapi.NewMessage(update3.Message.Chat.ID, update3.Message.Text)
+									str := strings.Split(update3.Message.Text, " ")
+									if len(str) != 2 {
+										msg.Text = "Не правильный ввод, попробуйте ещё раз\nПример: USD 1000"
+										bot.Send(msg)
+									} else {
+										Conv := cur_conv.Conv(str[0], "RUB", str[1])
+										msg.Text = "На вашем кошельке:\n" + cur_conv.Wallet(Conv, "sum", id) + " рублей"
+										msg.ReplyMarkup = keyb
+										bot.Send(msg)
+										break
+									}
+								}
+							}
+						case "Убавить":
+							msg.Text = "В какой валюте хотите убавить и сколько\nВся валюта будет конвертированна в рубли"
+							bot.Send(msg)
+							for update3 := range updates {
+								if update3.Message != nil {
+									msg = tgbotapi.NewMessage(update3.Message.Chat.ID, update3.Message.Text)
+									str := strings.Split(update3.Message.Text, " ")
+									if len(str) != 2 {
+										msg.Text = "Не правильный ввод, попробуйте ещё раз\nПример: USD 1000"
+										bot.Send(msg)
+									} else {
+										Conv := cur_conv.Conv(str[0], "RUB", str[1])
+										msg.Text = "На вашем кошельке:\n" + cur_conv.Wallet(Conv, "min", id) + " рублей"
+										msg.ReplyMarkup = keyb
+										bot.Send(msg)
+										break
+									}
+								}
+							}
+						case "Назад":
+							msg.Text = "Выберите:"
+							msg.ReplyMarkup = keyb
+							bot.Send(msg)
+
+						}
+					}
+					break
+				}
 			}
+		} else if update.Message.IsCommand() && update.CallbackQuery == nil {
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+			switch update.Message.Command() {
+			case "start":
+				msg.Text = "Выберите:"
+				msg.ReplyMarkup = keyb
+			}
+			bot.Send(msg)
 		}
 	}
 
